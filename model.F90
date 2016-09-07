@@ -15,7 +15,9 @@ module MODEL
 
   integer, parameter     :: nx=400, ny=400
   real*8, pointer        :: pressure(:,:), new_p(:,:), f(:,:)
+  real*8                 :: dh 
   type(ESMF_Grid)        :: model_grid
+  type(ESMF_Field)       :: p_field
   
   public pressure
   public model_initialize
@@ -42,8 +44,10 @@ module MODEL
     if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
       line=__LINE__, file=__FILE__)) return  ! bail out
 
+    dh = 200./nx
+
     ! Create Model pressure Field, allocate memory with halo
-    field = ESMF_FieldCreate(model_grid, typekind=ESMF_TYPEKIND_R8, &
+    p_field = ESMF_FieldCreate(model_grid, typekind=ESMF_TYPEKIND_R8, &
       totalLWidth=(/1,1/), totalUWidth=(/1,1/), &
       name="pressure", &
       rc=rc)
@@ -51,7 +55,7 @@ module MODEL
       line=__LINE__, file=__FILE__)) return  ! bail out
 
     ! Retrieve pressure fortran array pointer from pressure field.
-    call ESMF_FieldGet(field, farrayPtr=pressure, rc=rc)
+    call ESMF_FieldGet(p_field, farrayPtr=pressure, rc=rc)
     if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
       line=__LINE__, file=__FILE__)) return  ! bail out
 
@@ -64,9 +68,25 @@ module MODEL
   
   !-----------------------------------------------------------------------------
 
-  subroutine model_run
+  subroutine model_run(rc)
+    integer, intent(out)          :: rc
 
-    integer                         :: i, j
+    integer                         :: i, j, clb(2), cub(2)
+    real*8, pointer                 :: p(:,:)
+    real*8                          :: epsilon=1.e-6
+
+    rc = ESMF_SUCCESS
+
+    call ESMF_FieldGetBounds(p_field, computationalLBound=clb, computationalUBound=cub, rc=rc) 
+    if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
+      line=__LINE__, file=__FILE__)) return  ! bail out
+
+    p => pressure
+    do j =  clb(2), cub(2)
+      do i =  clb(1), cub(1)
+        new_p(i,j) = dh*dh *(p(i-1,j)+p(i+1,j)-4*p(i,j)+p(i,j-1)+p(i,j+1))
+      enddo
+    enddo
     
 
   end subroutine
